@@ -76,6 +76,7 @@ public class Config {
     private Supplier<String> keystorePassword = () -> null;
     private String cookieSpec;
     private UniMetric metrics = new NoopMetric();
+    private boolean retry = false;
 
     public Config() {
         setDefaults();
@@ -427,6 +428,18 @@ public class Config {
     }
 
     /**
+     * Automaticly retry on 429/529 responses with the Retry-After response header
+     * Default is false
+     *
+     * @param value a bool is its true or not.
+     * @return this config object
+     */
+    public Config automaticRetryAfter(boolean value) {
+        this.retry = value;
+        return this;
+    }
+
+    /**
      * Automaticly retry certain recoverable errors like socket timeouts. Up to 4 times
      * Note that currently this only works on synchronous calls.
      * Default is true
@@ -709,5 +722,9 @@ public class Config {
 
     public UniMetric getMetric() {
         return metrics;
+    }
+
+    public boolean isAutomaticRetryAfter(){
+        return retry;
     }
 }

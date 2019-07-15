@@ -32,8 +32,11 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import static java.util.Arrays.asList;
+
 abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
+    protected static final Set<Integer> retryCodes = new HashSet<>(asList(429, 529, 301));
     private Optional<ObjectMapper> objectMapper = Optional.empty();
     private String responseEncoding;
     protected Headers headers = new Headers();
@@ -157,7 +160,20 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public HttpResponse asEmpty() {
-        return config.getClient().request(this, EmptyResponse::new);
+        return getResponse(EmptyResponse::new);
+    }
+
+    private <E> HttpResponse<E> getResponse(Function<RawResponse, HttpResponse<E>> transformer){
+        HttpResponse<E> response = config.getClient().request(this, transformer);
+        if(config.isAutomaticRetryAfter() && retryCodes.contains(response.getStatus()) && response.getHeaders().containsKey("Retry-After")){
+            waitForIt(response.getHeaders());
+            return getResponse(transformer);
+        }
+        return response;
+    }
+
+    private void waitForIt(Headers response) {
+         RetryAfter.parse(response).waitForIt();
     }
 
     @Override
@@ -174,7 +190,7 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public HttpResponse<String> asString() throws UnirestException {
-        return config.getClient().request(this, r -> new StringResponse(r, responseEncoding));
+        return getResponse(r -> new StringResponse(r, responseEncoding));
     }
 
     @Override
@@ -191,7 +207,7 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public HttpResponse<JsonNode> asJson() throws UnirestException {
-        return config.getClient().request(this, JsonResponse::new);
+        return getResponse(JsonResponse::new);
     }
 
     @Override
@@ -208,17 +224,17 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public <T> HttpResponse<T> asObject(Class<? extends T> responseClass) throws UnirestException {
-        return config.getClient().request(this, r -> new ObjectResponse<T>(getObjectMapper(), r, responseClass));
+        return getResponse(r -> new ObjectResponse<T>(getObjectMapper(), r, responseClass));
     }
 
     @Override
     public <T> HttpResponse<T> asObject(GenericType<T> genericType) throws UnirestException {
-        return config.getClient().request(this, r -> new ObjectResponse<T>(getObjectMapper(), r, genericType));
+        return getResponse(r -> new ObjectResponse<T>(getObjectMapper(), r, genericType));
     }
 
     @Override
     public <T> HttpResponse<T> asObject(Function<RawResponse, T> function) {
-        return config.getClient().request(this, funcResponse(function));
+        return getResponse(funcResponse(function));
     }
 
     @Override
@@ -257,7 +273,7 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public void thenConsume(Consumer<RawResponse> consumer) {
-        config.getClient().request(this, getConsumer(consumer));
+        getResponse(getConsumer(consumer));
     }
 
     @Override
@@ -267,7 +283,7 @@ abstract class BaseRequest<R extends HttpRequest> implements HttpRequest<R> {
 
     @Override
     public HttpResponse<File> asFile(String path) {
-        return config.getClient().request(this, r -> new FileResponse(r, path));
+        return getResponse(r -> new FileResponse(r, path));
     }
 
     @Override
