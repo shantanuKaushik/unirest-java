@@ -27,26 +27,18 @@ package kong.unirest.apache;
 
 import kong.unirest.Config;
 import kong.unirest.HttpRequest;
-import org.apache.http.client.config.RequestConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.util.Timeout;
 
 class DefaultFactory implements RequestConfigFactory {
     @Override
     public RequestConfig apply(Config config, HttpRequest request) {
-        RequestConfig.Builder builder = RequestConfig.custom()
-                .setConnectTimeout(request.getConnectTimeout())
-                .setSocketTimeout(request.getSocketTimeout())
-                .setConnectionRequestTimeout(request.getSocketTimeout())
+        return RequestConfig.custom()
+                .setConnectTimeout(Timeout.ofMilliseconds(request.getConnectTimeout()))
+               // .setSocketTimeout(request.getSocketTimeout())
+                .setConnectionRequestTimeout(Timeout.ofMilliseconds(request.getSocketTimeout()))
                 .setProxy(RequestOptions.toApacheProxy(request.getProxy()))
-                .setCookieSpec(config.getCookieSpec());
-
-        return tryNormalize(builder).build();
-    }
-
-    private RequestConfig.Builder tryNormalize(RequestConfig.Builder builder) {
-        try {
-            return builder.setNormalizeUri(false);
-        }catch (Exception e) {
-            return builder;
-        }
+                .setCookieSpec(config.getCookieSpec())
+                .build();
     }
 }
